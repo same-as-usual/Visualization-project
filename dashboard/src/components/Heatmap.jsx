@@ -3,35 +3,33 @@ import { formatPercent } from '../utils/formatters';
 
 export default function Heatmap({ data, selectedCategory }) {
   const heatmapData = useMemo(() => {
-    if (!data?.groups) return { skills: [], locations: [], cells: {} };
+    // data.locations: full-period skill×country aggregates from the export
+    // (one row per pair, already suppression-filtered).
+    if (!data?.locations?.length) return { skills: [], locations: [], cells: {} };
 
-    let groups = data.groups.filter(g => !g.suppressed);
-
+    let rows = data.locations;
     if (selectedCategory && selectedCategory !== 'all') {
-      groups = groups.filter(g => g.category === selectedCategory);
+      rows = rows.filter(r => r.category === selectedCategory);
     }
 
-    // Get unique skills and locations
-    const skillSet = new Set();
-    const locationSet = new Set();
     const cells = {};
-
-    for (const g of groups) {
-      if (!g.location) continue;
-      skillSet.add(g.skill);
-      locationSet.add(g.location);
-      const key = `${g.skill}|${g.location}`;
-      cells[key] = g.current_share;
+    const skillTotals = {};
+    const locPostings = {};
+    for (const r of rows) {
+      cells[`${r.skill}|${r.location}`] = r.share;
+      skillTotals[r.skill] = (skillTotals[r.skill] || 0) + r.share;
+      locPostings[r.location] = Math.max(locPostings[r.location] || 0, r.postings || 0);
     }
 
-    // Sort skills by average share
-    const skills = [...skillSet].sort((a, b) => {
-      const avgA = groups.filter(g => g.skill === a).reduce((s, g) => s + g.current_share, 0);
-      const avgB = groups.filter(g => g.skill === b).reduce((s, g) => s + g.current_share, 0);
-      return avgB - avgA;
-    });
+    const skills = Object.keys(skillTotals)
+      .sort((a, b) => skillTotals[b] - skillTotals[a])
+      .slice(0, 20);
+    // Columns ordered by posting volume (biggest markets first).
+    const locations = Object.keys(locPostings)
+      .sort((a, b) => locPostings[b] - locPostings[a])
+      .slice(0, 10);
 
-    return { skills: skills.slice(0, 20), locations: [...locationSet].slice(0, 10), cells };
+    return { skills, locations, cells };
   }, [data, selectedCategory]);
 
   if (!heatmapData.skills.length) {
@@ -46,11 +44,12 @@ export default function Heatmap({ data, selectedCategory }) {
   const { skills, locations, cells } = heatmapData;
 
   const getColor = (value) => {
+    // Thresholds tuned to realistic skill shares (top skills sit ~10–30%).
     if (value == null) return 'bg-gray-50';
-    if (value >= 0.5) return 'bg-blue-700 text-white';
-    if (value >= 0.3) return 'bg-blue-500 text-white';
-    if (value >= 0.15) return 'bg-blue-300';
-    if (value >= 0.05) return 'bg-blue-100';
+    if (value >= 0.25) return 'bg-blue-700 text-white';
+    if (value >= 0.15) return 'bg-blue-500 text-white';
+    if (value >= 0.08) return 'bg-blue-300';
+    if (value >= 0.03) return 'bg-blue-100';
     return 'bg-blue-50';
   };
 

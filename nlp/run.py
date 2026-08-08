@@ -39,6 +39,53 @@ structlog.configure(
 log = structlog.get_logger()
 
 
+# Adzuna query country code -> display name for the dashboard heatmap.
+_COUNTRY_NAMES = {
+    "in": "India",
+    "us": "United States",
+    "gb": "United Kingdom",
+    "au": "Australia",
+    "ca": "Canada",
+    "de": "Germany",
+    "fr": "France",
+    "sg": "Singapore",
+}
+
+
+def _posting_meta(source: str, record: dict) -> dict:
+    """Pull posting-level metadata (posted date, location) out of a raw record.
+
+    posted_at drives the weekly trend bucketing: the backfill collects postings
+    created over the previous ~30 days, so bucketing by posted date (instead of
+    fetched date) yields a real multi-week time series from day one.
+    """
+    payload = record.get("payload", {})
+    posted_at = None
+    country = None
+    location = None
+
+    if source == "adzuna":
+        posted_at = payload.get("created")
+        query = record.get("query", {}) or {}
+        code = (query.get("country") or "").lower()
+        loc = payload.get("location", {}) or {}
+        area = loc.get("area") or []
+        country = _COUNTRY_NAMES.get(code) or (area[0] if area else None)
+        location = loc.get("display_name")
+    elif source == "remotive":
+        posted_at = payload.get("publication_date")
+        # Remotive is remote-only; candidate_required_location is a region
+        # string like "Europe", "USA", "Worldwide".
+        country = payload.get("candidate_required_location") or "Remote"
+        location = country
+
+    return {
+        "posted_at": posted_at or record.get("fetched_at"),
+        "country": country,
+        "location": location,
+    }
+
+
 def extract_from_jsonl(
     input_path: Path,
     output_dir: Path,
@@ -80,13 +127,29 @@ def extract_from_jsonl(
             is_html = source == "remotive"
             text = f"{title}. {description}" if title else description
             mentions = extractor.extract(text, is_html=is_html)
+            meta = _posting_meta(source, record)
 
             if mentions:
                 records_extracted += 1
                 total_mentions += len(mentions)
 
-            # Write each mention as a line
+            # Postings index: one line per posting, mentions or not. This is
+            # the denominator for skill-share percentages — counting only
+            # postings with >=1 mention would inflate every share.
             output_path = _output_path(output_dir, source, record, input_path)
+            postings_path = output_dir / "postings" / output_path.relative_to(output_dir)
+            postings_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(postings_path, "a", encoding="utf-8") as out:
+                out.write(json.dumps({
+                    "source": source,
+                    "source_id": record.get("source_id"),
+                    "posted_at": meta["posted_at"],
+                    "country": meta["country"],
+                    "location": meta["location"],
+                    "mention_count": len(mentions),
+                }, ensure_ascii=False, default=str) + "\n")
+
+            # Write each mention as a line
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "a", encoding="utf-8") as out:
                 for mention in mentions:
@@ -95,6 +158,9 @@ def extract_from_jsonl(
                         "source_id": record.get("source_id"),
                         "run_id": record.get("run_id"),
                         "fetched_at": record.get("fetched_at"),
+                        "posted_at": meta["posted_at"],
+                        "country": meta["country"],
+                        "location": meta["location"],
                         "skill": mention.skill,
                         "category": mention.category,
                         "matched_alias": mention.matched_alias,

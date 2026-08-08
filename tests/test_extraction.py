@@ -70,8 +70,12 @@ def test_extract_from_jsonl(sample_raw_jsonl: Path, tmp_path: Path):
     assert stats["errors"] == 0
     assert stats["source"] == "remotive"
 
-    # Check output file exists and has valid JSONL
-    output_files = list(output_dir.rglob("*.jsonl"))
+    # Check output file exists and has valid JSONL (mentions live outside
+    # the postings/ index dir)
+    output_files = [
+        f for f in output_dir.rglob("*.jsonl")
+        if (output_dir / "postings") not in f.parents
+    ]
     assert len(output_files) >= 1
 
     mentions = []
@@ -84,6 +88,20 @@ def test_extract_from_jsonl(sample_raw_jsonl: Path, tmp_path: Path):
     skill_names = {m["skill"] for m in mentions}
     assert "Python" in skill_names or "SQL" in skill_names
 
+    # Mentions carry posting metadata for trend bucketing + heatmap
+    assert all("posted_at" in m and "country" in m for m in mentions)
+
+    # Postings index: one line per posting (denominator for shares)
+    postings_files = list((output_dir / "postings").rglob("*.jsonl"))
+    assert len(postings_files) >= 1
+    postings = []
+    for f in postings_files:
+        for line in f.read_text().splitlines():
+            if line.strip():
+                postings.append(json.loads(line))
+    assert len(postings) == stats["records_read"]
+    assert all("posted_at" in p and "mention_count" in p for p in postings)
+
 
 def test_extract_from_jsonl_html_stripping(sample_raw_jsonl: Path, tmp_path: Path):
     """Test that HTML is properly stripped from Remotive descriptions."""
@@ -95,6 +113,8 @@ def test_extract_from_jsonl_html_stripping(sample_raw_jsonl: Path, tmp_path: Pat
 
     mentions = []
     for f in output_dir.rglob("*.jsonl"):
+        if (output_dir / "postings") in f.parents:
+            continue
         for line in f.read_text().splitlines():
             if line.strip():
                 mentions.append(json.loads(line))

@@ -15,15 +15,22 @@ export default function TopSkillsChart({ data, trends }) {
     );
   }
 
-  // Merge delta info from trends
+  // Direction comes from the LATEST week's trend row for this skill (the
+  // export emits one row per week; only the latest carries current momentum).
+  const partialWeeks = new Set(trends?.partial_weeks || []);
   const withDeltas = data.map(skill => {
-    const trend = trends?.groups?.find(
-      g => g.skill === skill.skill && !g.suppressed
-    );
+    // Momentum from the latest COMPLETE week — a half-collected week would
+    // show phantom falls for everything.
+    const skillWeeks = (trends?.groups || [])
+      .filter(g => g.skill === skill.skill && !g.suppressed && !partialWeeks.has(g.week))
+      .sort((a, b) => a.week.localeCompare(b.week));
+    const latest = skillWeeks[skillWeeks.length - 1];
     return {
       ...skill,
-      delta_pp: trend?.delta_pp || 0,
-      direction: trend?.direction || 'stable',
+      // delta_pp: null when there's no prior period to compare against —
+      // show nothing rather than a meaningless "+X pp vs zero".
+      delta_pp: skill.delta_pp ?? null,
+      direction: latest?.direction || 'insufficient_data',
     };
   });
 
@@ -31,7 +38,8 @@ export default function TopSkillsChart({ data, trends }) {
     <div className="card">
       <h3 className="text-lg font-semibold mb-4">Top Skills by Demand</h3>
       <p className="text-sm text-gray-500 mb-4">
-        % of postings mentioning each skill (latest period)
+        % of postings mentioning each skill (full collection period), with
+        week-over-week change where enough history exists
       </p>
       <div className="space-y-3">
         {withDeltas.slice(0, 15).map((skill, i) => (
@@ -46,14 +54,16 @@ export default function TopSkillsChart({ data, trends }) {
                   <span className="text-sm text-gray-600">
                     {formatPercent(skill.share)}
                   </span>
-                  {skill.delta_pp !== 0 && (
+                  {skill.delta_pp != null && skill.delta_pp !== 0 && (
                     <span className={`text-xs ${skill.delta_pp > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatDelta(skill.delta_pp)}
+                      {formatDelta(skill.delta_pp)} w/w
                     </span>
                   )}
-                  <span className={`badge ${directionBadge(skill.direction)}`}>
-                    {directionLabel(skill.direction)}
-                  </span>
+                  {['rising', 'falling', 'stable'].includes(skill.direction) && (
+                    <span className={`badge ${directionBadge(skill.direction)}`}>
+                      {directionLabel(skill.direction)}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
