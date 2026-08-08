@@ -2,32 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens — validated palette (dataviz reference instance).
+   Categorical slots pass CVD checks in this fixed order; never cycle past 8. */
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --hairline: rgba(11, 11, 11, 0.1);
+  --good: #006300;
+  --bad: #d03b3b;
+  --s1: #2a78d6;
+  --s2: #1baf7a;
+  --s3: #eda100;
+  --s4: #008300;
+  --s5: #4a3aa7;
+  --s6: #e34948;
+  --s7: #e87ba4;
+  --s8: #eb6834;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: #f8fafc;
-  color: #1e293b;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  background-color: var(--page);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 .card {
-  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  background-color: var(--surface);
+  border: 1px solid var(--hairline);
+  @apply rounded-xl p-6;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 .badge {
-  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border;
 }
 
 .badge-rising {
-  @apply bg-green-100 text-green-800;
+  color: var(--good);
+  border-color: rgba(0, 99, 0, 0.25);
+  background: rgba(0, 99, 0, 0.06);
 }
 
 .badge-falling {
-  @apply bg-red-100 text-red-800;
+  color: var(--bad);
+  border-color: rgba(208, 59, 59, 0.25);
+  background: rgba(208, 59, 59, 0.06);
 }
 
 .badge-stable {
-  @apply bg-gray-100 text-gray-800;
+  color: var(--ink-2);
+  border-color: var(--hairline);
+  background: transparent;
 }
 
 .badge-suppressed {
-  @apply bg-yellow-100 text-yellow-800;
+  color: var(--muted);
+  border-color: var(--hairline);
+  background: transparent;
 }

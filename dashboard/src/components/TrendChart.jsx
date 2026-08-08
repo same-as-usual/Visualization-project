@@ -1,24 +1,44 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from 'recharts';
 import { formatPercent } from '../utils/formatters';
+import { buildSkillColorMap, GRID, BASELINE, MUTED, INK, INK_2, SURFACE } from '../utils/viz';
 
-const COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
-];
+const MAX_LINES = 8; // hard cap — the palette has 8 CVD-safe slots, never cycle
+
+function VizTooltip({ active, payload, label, partialWeeks }) {
+  if (!active || !payload?.length) return null;
+  const rows = [...payload].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  return (
+    <div
+      className="rounded-lg px-3 py-2 text-xs"
+      style={{ background: SURFACE, border: '1px solid rgba(11,11,11,0.1)', boxShadow: '0 2px 8px rgba(11,11,11,0.08)' }}
+    >
+      <p className="mb-1.5 font-medium" style={{ color: INK_2 }}>
+        {partialWeeks.has(label) ? `${label} (partial week)` : label}
+      </p>
+      {rows.map((r) => (
+        <div key={r.dataKey} className="flex items-center gap-2 py-0.5">
+          <span style={{ display: 'inline-block', width: 12, height: 2, background: r.stroke, borderRadius: 1 }} />
+          <span className="font-semibold tnum" style={{ color: INK }}>{formatPercent(r.value)}</span>
+          <span style={{ color: INK_2 }}>{r.dataKey}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function TrendChart({ data, selectedSkills, selectedCategory }) {
-  const [hoveredSkill, setHoveredSkill] = useState(null);
   const partialWeeks = useMemo(
     () => new Set(data?.partial_weeks || []),
     [data]
   );
 
-  const MAX_LINES = 10;
-  const DEFAULT_LINES = 8;
+  // Stable entity → color map built from the FULL dataset, so filtering
+  // never repaints a surviving series.
+  const colorMap = useMemo(() => buildSkillColorMap(data?.groups), [data]);
 
   const { chartData, skills } = useMemo(() => {
     if (!data?.groups) return { chartData: [], skills: [] };
@@ -44,7 +64,7 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
       }
       skillList = Object.keys(totals)
         .sort((a, b) => totals[b] / counts[b] - totals[a] / counts[a])
-        .slice(0, DEFAULT_LINES);
+        .slice(0, MAX_LINES);
     }
 
     const skillSet = new Set(skillList);
@@ -61,55 +81,83 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
     };
   }, [data, selectedSkills, selectedCategory]);
 
+  // Clean y-axis: pick a round tick step (1/2/5/10/20pp) giving ≤5 ticks.
+  const { niceMax, yTicks } = useMemo(() => {
+    let max = 0;
+    for (const row of chartData) {
+      for (const k of Object.keys(row)) {
+        if (k !== 'week' && row[k] > max) max = row[k];
+      }
+    }
+    const steps = [0.01, 0.02, 0.05, 0.1, 0.2];
+    const step = steps.find(s => Math.ceil(max / s) <= 4) || 0.25;
+    const nm = step * Math.max(1, Math.ceil(max / step));
+    const ticks = [];
+    for (let t = 0; t <= nm + 1e-9; t += step) ticks.push(Math.round(t * 100) / 100);
+    return { niceMax: nm, yTicks: ticks };
+  }, [chartData]);
+
   if (!chartData.length) {
     return (
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Skill Demand Over Time</h3>
-        <p className="text-gray-500">No trend data available yet. Data will appear after collection runs.</p>
+        <h3 className="text-lg font-semibold mb-1">Skill demand over time</h3>
+        <p style={{ color: MUTED }}>No trend data yet — it appears after the first collection runs.</p>
       </div>
     );
   }
 
   return (
     <div className="card">
-      <h3 className="text-lg font-semibold mb-4">Skill Demand Over Time</h3>
-      <p className="text-sm text-gray-500 mb-4">
+      <h3 className="text-lg font-semibold" style={{ color: INK }}>Skill demand over time</h3>
+      <p className="text-sm mt-1 mb-5" style={{ color: INK_2 }}>
         % of postings mentioning each skill, by week posted
         {(!selectedSkills || selectedSkills.length === 0) &&
-          ' — showing the top skills; pick specific ones in the filter panel'}
+          ' — top skills shown; pick specific ones in the filter panel'}
         {partialWeeks.size > 0 && '. Weeks marked * are partially collected.'}
       </p>
       <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={GRID} strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="week"
-            tick={{ fontSize: 12 }}
+            tick={{ fontSize: 12, fill: MUTED }}
             tickLine={false}
+            axisLine={{ stroke: BASELINE }}
             tickFormatter={(w) => partialWeeks.has(w) ? `${w}*` : w}
           />
           <YAxis
-            tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
-            tick={{ fontSize: 12 }}
+            domain={[0, niceMax]}
+            ticks={yTicks}
+            tickFormatter={(v) => `${Math.round(v * 100)}%`}
+            tick={{ fontSize: 12, fill: MUTED }}
             tickLine={false}
+            axisLine={false}
+            width={44}
           />
           <Tooltip
-            formatter={(value, name) => [formatPercent(value), name]}
-            labelFormatter={(label) =>
-              partialWeeks.has(label) ? `Week: ${label} (partial)` : `Week: ${label}`}
+            content={<VizTooltip partialWeeks={partialWeeks} />}
+            cursor={{ stroke: BASELINE, strokeWidth: 1 }}
           />
-          <Legend />
-          {skills.map((skill, i) => (
+          <Legend
+            iconType="plainline"
+            wrapperStyle={{ paddingTop: 12 }}
+            formatter={(value) => (
+              <span style={{ color: INK_2, fontSize: 13, marginRight: 4 }}>{value}</span>
+            )}
+          />
+          {skills.map((skill) => (
             <Line
               key={skill}
               type="monotone"
               dataKey={skill}
-              stroke={COLORS[i % COLORS.length]}
-              strokeWidth={hoveredSkill === skill ? 3 : 1.5}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
-              onMouseEnter={() => setHoveredSkill(skill)}
-              onMouseLeave={() => setHoveredSkill(null)}
+              stroke={colorMap[skill] || MUTED}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              // ≥8px marker with a 2px surface ring so dots stay legible
+              // where lines cross
+              dot={{ r: 4, fill: colorMap[skill] || MUTED, stroke: SURFACE, strokeWidth: 2 }}
+              activeDot={{ r: 5, stroke: SURFACE, strokeWidth: 2 }}
             />
           ))}
         </LineChart>

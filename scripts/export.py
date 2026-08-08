@@ -270,8 +270,15 @@ def build_top_skills(
 
 def load_ingestion_stats(raw_dir: Path) -> dict:
     runs = []
-    for jsonl_file in raw_dir.rglob("ingestion_runs.jsonl"):
-        runs.extend(_read_jsonl(jsonl_file))
+    # ingestion_runs.jsonl lives at the data root (sibling of raw/), so scan
+    # the parent as well as the raw dir itself.
+    seen = set()
+    for base in (raw_dir, raw_dir.parent):
+        for jsonl_file in base.rglob("ingestion_runs.jsonl"):
+            if jsonl_file in seen:
+                continue
+            seen.add(jsonl_file)
+            runs.extend(_read_jsonl(jsonl_file))
     return {
         "total_runs": len(runs),
         "total_landed": sum(r.get("records_landed", 0) for r in runs),

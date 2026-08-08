@@ -1,5 +1,7 @@
 import React from 'react';
 
+const MAX_SKILLS = 8; // matches the trend chart's 8 CVD-safe color slots
+
 export default function FilterPanel({
   taxonomy,
   selectedCategory,
@@ -8,7 +10,7 @@ export default function FilterPanel({
   setSelectedSkills,
 }) {
   const categories = taxonomy?.categories
-    ? ['all', ...Object.keys(taxonomy.categories)]
+    ? ['all', ...Object.keys(taxonomy.categories).sort()]
     : ['all'];
 
   const skillsInCategory = taxonomy?.categories
@@ -16,22 +18,25 @@ export default function FilterPanel({
         ? Object.values(taxonomy.categories).flat()
         : taxonomy.categories[selectedCategory] || [])
     : [];
+  const sortedSkills = [...skillsInCategory].sort((a, b) => a.name.localeCompare(b.name));
 
   const toggleSkill = (skillName) => {
-    setSelectedSkills(prev =>
-      prev.includes(skillName)
-        ? prev.filter(s => s !== skillName)
-        : [...prev, skillName]
-    );
+    setSelectedSkills(prev => {
+      if (prev.includes(skillName)) return prev.filter(s => s !== skillName);
+      if (prev.length >= MAX_SKILLS) return prev; // cap reached
+      return [...prev, skillName];
+    });
   };
+
+  const atCap = selectedSkills.length >= MAX_SKILLS;
 
   return (
     <div className="card">
-      <h3 className="text-lg font-semibold mb-4">Filters</h3>
+      <h3 className="text-base font-semibold mb-4" style={{ color: '#0b0b0b' }}>Filters</h3>
 
       {/* Category selector */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="mb-5">
+        <label className="block text-xs font-medium mb-1.5" style={{ color: '#52514e' }}>
           Category
         </label>
         <select
@@ -40,11 +45,12 @@ export default function FilterPanel({
             setSelectedCategory(e.target.value);
             setSelectedSkills([]);
           }}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2"
+          style={{ border: '1px solid var(--hairline)', background: 'var(--surface)', color: '#0b0b0b' }}
         >
           {categories.map(cat => (
             <option key={cat} value={cat}>
-              {cat === 'all' ? 'All Categories' : cat}
+              {cat === 'all' ? 'All categories' : cat}
             </option>
           ))}
         </select>
@@ -52,32 +58,50 @@ export default function FilterPanel({
 
       {/* Skill multi-select */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Skills {selectedSkills.length > 0 && `(${selectedSkills.length} selected)`}
-        </label>
-        <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
-          {skillsInCategory.map(skill => (
-            <label
-              key={skill.name}
-              className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 rounded cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={selectedSkills.includes(skill.name)}
-                onChange={() => toggleSkill(skill.name)}
-                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
-              />
-              <span className="text-sm">{skill.name}</span>
-            </label>
-          ))}
-          {skillsInCategory.length === 0 && (
-            <p className="text-sm text-gray-400 px-2">No skills in this category</p>
+        <div className="flex items-baseline justify-between mb-1.5">
+          <label className="text-xs font-medium" style={{ color: '#52514e' }}>
+            Skills
+          </label>
+          <span className="text-xs tnum" style={{ color: atCap ? 'var(--bad)' : '#898781' }}>
+            {selectedSkills.length}/{MAX_SKILLS}
+          </span>
+        </div>
+        <div
+          className="max-h-72 overflow-y-auto rounded-lg p-1.5 space-y-0.5"
+          style={{ border: '1px solid var(--hairline)' }}
+        >
+          {sortedSkills.map(skill => {
+            const checked = selectedSkills.includes(skill.name);
+            const disabled = !checked && atCap;
+            return (
+              <label
+                key={skill.name}
+                className={`flex items-center gap-2 px-2 py-1 rounded-md ${disabled ? 'opacity-40' : 'cursor-pointer hover:bg-black/[0.03]'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => toggleSkill(skill.name)}
+                  className="rounded"
+                  style={{ accentColor: '#2a78d6' }}
+                />
+                <span className="text-sm" style={{ color: '#0b0b0b' }}>{skill.name}</span>
+              </label>
+            );
+          })}
+          {sortedSkills.length === 0 && (
+            <p className="text-sm px-2 py-1" style={{ color: '#898781' }}>No skills in this category</p>
           )}
         </div>
+        <p className="text-xs mt-2" style={{ color: '#898781' }}>
+          Pick up to {MAX_SKILLS} skills to compare on the trend chart.
+        </p>
         {selectedSkills.length > 0 && (
           <button
             onClick={() => setSelectedSkills([])}
-            className="mt-2 text-sm text-primary-600 hover:text-primary-700"
+            className="mt-1 text-sm font-medium hover:underline"
+            style={{ color: '#2a78d6' }}
           >
             Clear selection
           </button>

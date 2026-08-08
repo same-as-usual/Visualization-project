@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { formatPercent } from '../utils/formatters';
+import { SEQ, SEQ_WHITE_TEXT_FROM, INK, INK_2, MUTED } from '../utils/viz';
 
 export default function Heatmap({ data, selectedCategory }) {
   const heatmapData = useMemo(() => {
     // data.locations: full-period skill×country aggregates from the export
     // (one row per pair, already suppression-filtered).
-    if (!data?.locations?.length) return { skills: [], locations: [], cells: {} };
+    if (!data?.locations?.length) return { skills: [], locations: [], cells: {}, max: 0 };
 
     let rows = data.locations;
     if (selectedCategory && selectedCategory !== 'all') {
@@ -15,10 +16,12 @@ export default function Heatmap({ data, selectedCategory }) {
     const cells = {};
     const skillTotals = {};
     const locPostings = {};
+    let max = 0;
     for (const r of rows) {
       cells[`${r.skill}|${r.location}`] = r.share;
       skillTotals[r.skill] = (skillTotals[r.skill] || 0) + r.share;
       locPostings[r.location] = Math.max(locPostings[r.location] || 0, r.postings || 0);
+      if (r.share > max) max = r.share;
     }
 
     const skills = Object.keys(skillTotals)
@@ -29,61 +32,73 @@ export default function Heatmap({ data, selectedCategory }) {
       .sort((a, b) => locPostings[b] - locPostings[a])
       .slice(0, 10);
 
-    return { skills, locations, cells };
+    return { skills, locations, cells, max, locPostings };
   }, [data, selectedCategory]);
 
   if (!heatmapData.skills.length) {
     return (
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Skill × Location Heatmap</h3>
-        <p className="text-gray-500">No location data available yet.</p>
+        <h3 className="text-lg font-semibold mb-1">Skill × market heatmap</h3>
+        <p style={{ color: MUTED }}>No location data available yet.</p>
       </div>
     );
   }
 
-  const { skills, locations, cells } = heatmapData;
+  const { skills, locations, cells, max, locPostings } = heatmapData;
 
-  const getColor = (value) => {
-    // Thresholds tuned to realistic skill shares (top skills sit ~10–30%).
-    if (value == null) return 'bg-gray-50';
-    if (value >= 0.25) return 'bg-blue-700 text-white';
-    if (value >= 0.15) return 'bg-blue-500 text-white';
-    if (value >= 0.08) return 'bg-blue-300';
-    if (value >= 0.03) return 'bg-blue-100';
-    return 'bg-blue-50';
+  // Sequential: one hue, light→dark, binned against the observed max.
+  const stepFor = (value) => {
+    if (value == null || max === 0) return null;
+    return Math.min(SEQ.length - 1, Math.floor((value / max) * SEQ.length));
   };
 
   return (
     <div className="card">
-      <h3 className="text-lg font-semibold mb-4">Skill × Location Heatmap</h3>
-      <p className="text-sm text-gray-500 mb-4">
-        % of postings mentioning each skill by location
+      <h3 className="text-lg font-semibold" style={{ color: INK }}>Skill × market heatmap</h3>
+      <p className="text-sm mt-1 mb-5" style={{ color: INK_2 }}>
+        % of postings mentioning each skill, by market, over the full collection period
       </p>
       <div className="overflow-x-auto">
-        <table className="text-xs">
+        {/* borderSpacing = the 2px surface gap between cells */}
+        <table className="text-xs" style={{ borderCollapse: 'separate', borderSpacing: 2 }}>
           <thead>
             <tr>
-              <th className="text-left p-2 font-medium text-gray-600 sticky left-0 bg-white z-10">
+              <th className="text-left p-2 font-medium sticky left-0 z-10"
+                  style={{ color: INK_2, background: 'var(--surface)' }}>
                 Skill
               </th>
               {locations.map(loc => (
-                <th key={loc} className="p-2 font-medium text-gray-600 text-center min-w-[80px]">
-                  {loc.length > 12 ? loc.slice(0, 12) + '…' : loc}
+                <th key={loc} className="p-2 font-medium text-center min-w-[92px]" style={{ color: INK_2 }}>
+                  <div>{loc.length > 14 ? loc.slice(0, 14) + '…' : loc}</div>
+                  <div className="font-normal tnum" style={{ color: MUTED }}>
+                    n={locPostings[loc]?.toLocaleString()}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {skills.map(skill => (
-              <tr key={skill} className="hover:bg-gray-50">
-                <td className="p-2 font-medium text-gray-700 sticky left-0 bg-white z-10">
+              <tr key={skill}>
+                <td className="p-2 font-medium sticky left-0 z-10 whitespace-nowrap"
+                    style={{ color: INK, background: 'var(--surface)' }}>
                   {skill}
                 </td>
                 {locations.map(loc => {
                   const value = cells[`${skill}|${loc}`];
+                  const step = stepFor(value);
+                  const bg = step == null ? '#f4f3f0' : SEQ[step];
+                  const fg = step != null && step >= SEQ_WHITE_TEXT_FROM ? '#ffffff' : INK;
                   return (
-                    <td key={loc} className={`p-2 text-center ${getColor(value)}`}>
-                      {value != null ? formatPercent(value, 0) : '—'}
+                    <td
+                      key={loc}
+                      className="p-2 text-center tnum rounded"
+                      style={{ background: bg, color: fg }}
+                      title={value != null
+                        ? `${skill} — ${loc}: ${formatPercent(value)} of postings`
+                        : `${skill} — ${loc}: below reporting threshold`}
+                    >
+                      {value != null ? formatPercent(value, 0) : '·'}
                     </td>
                   );
                 })}
@@ -91,6 +106,17 @@ export default function Heatmap({ data, selectedCategory }) {
             ))}
           </tbody>
         </table>
+      </div>
+      {/* Scale legend */}
+      <div className="flex items-center gap-2 mt-4 text-xs" style={{ color: MUTED }}>
+        <span>0%</span>
+        <div className="flex" style={{ gap: 2 }}>
+          {SEQ.map(hex => (
+            <span key={hex} style={{ width: 22, height: 10, background: hex, borderRadius: 2, display: 'inline-block' }} />
+          ))}
+        </div>
+        <span className="tnum">{formatPercent(max, 0)}</span>
+        <span className="ml-2">· cells with too few postings are shown as “·”</span>
       </div>
     </div>
   );
