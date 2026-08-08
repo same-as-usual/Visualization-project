@@ -1,0 +1,59 @@
+name: load
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "45 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (collector code + committed raw data)
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install (incl. warehouse + dbt dep scan)
+        run: pip install -e ".[warehouse]"
+
+      - name: Load raw -> Postgres
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret not set. Add your Neon connection string under repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          python -m warehouse.load --db-url "$DATABASE_URL" --input data/raw/ || exit 1
+          echo "Loaded raw zone into Postgres."
+
+      - name: Run dbt (build staging views + mart tables)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pip install "dbt-postgres>=1.8"
+          DB_URL="$DATABASE_URL"
+          REST="${DB_URL#*://}"
+          CREDS="${REST%%@*}"
+          HOSTPORT_DB="${REST#*@}"
+          HOSTPORT_DB="${HOSTPORT_DB%%\?*}"
+          DBT_USER="${CREDS%%:*}"
+          DBT_PASSWORD="${CREDS#*:}"
+          DBT_DBNAME="${HOSTPORT_DB##*/}"
+          HOSTPORT="${HOSTPORT_DB%/*}"
+          DBT_HOST="${HOSTPORT%:*}"
+          DBT_PORT="${HOSTPORT##*:}"
+          if [ "$DBT_PORT" = "$DBT_HOST" ]; then DBT_PORT="5432"; fi
+          export DBT_HOST DBT_PORT DBT_USER DBT_PASSWORD DBT_DBNAME
+          echo "DBT_HOST=${DBT_HOST} DBT_PORT=${DBT_PORT} DBT_DBNAME=${DBT_DBNAME}"
+          cd warehouse/dbt
+          dbt debug --target dev
+          dbt run --target dev
+          dbt test --target dev
