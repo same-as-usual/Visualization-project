@@ -31,7 +31,7 @@ jobs:
             echo "::error::DATABASE_URL secret not set. Add your Neon connection string under repo Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          python -m warehouse.load --db-url "$DATABASE_URL" --input data/raw/ || exit 1
+          python -m warehouse.loader --db-url "$DATABASE_URL" --input data/raw/ || exit 1
           echo "Loaded raw zone into Postgres."
 
       - name: Run dbt (build staging views + mart tables)
