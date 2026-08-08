@@ -1,0 +1,186 @@
+# Canonical skill taxonomy — versioned input to the extractor.
+#
+# Every posting_skills row is stamped with this version; bump it on ANY edit so
+# re-extraction over the raw zone stays reproducible and auditable.
+#
+# match_policy:
+#   plain          (default) case-insensitive token-boundary phrase match
+#   case_sensitive exact-case token match — for skills that collide with common
+#                  words when lowercased ("R", "C", "Go", "Excel")
+#   context_required  case-sensitive AND a context_patterns regex must cover the
+#                  mention — for one-letter names where exact case still isn't enough
+#
+# Seeding strategy (see plan Phase 2): curated start; grow toward ~300 by mapping
+# against ESCO altLabels / Lightcast Open Skills, storing their IDs in `esco_uri`.
+
+version: "2026.08.0"
+
+skills:
+  # ── Languages ────────────────────────────────────────────────────────────
+  - {name: Python, category: language}
+  - {name: SQL, category: language}
+  - {name: Java, category: language}
+  - {name: JavaScript, category: language, aliases: [JS]}
+  - {name: TypeScript, category: language, aliases: [TS]}
+  - name: R
+    category: language
+    match_policy: context_required
+    context_patterns:
+      - '\bR (?:programming|language|scripts?|packages?|Shiny|Studio)\b'
+      - '\bin R\b'
+      - '(?:Python|SQL|SAS|Scala|Julia)(?:,| and| or|/) ?R\b'
+      - '\bR(?:,| and| or|/) ?(?:Python|SQL|SAS|Scala|Julia)\b'
+  - name: C
+    category: language
+    match_policy: context_required
+    context_patterns:
+      - '\bC (?:programming|language)\b'
+      - '\bin C\b'
+      - '\bC/C\+\+'
+  - {name: C++, category: language, aliases: [CPP]}
+  - {name: C#, category: language, aliases: [C-Sharp, CSharp]}
+  - name: Go
+    category: language
+    match_policy: context_required
+    aliases: [Golang]
+    context_patterns:
+      # NOTE: unambiguous aliases self-validate — the '\bGolang\b' pattern covers
+      # its own mention, so "Golang" needs no surrounding context while bare "Go" does.
+      - '\bGo (?:programming|language|developer|services?|microservices)\b'
+      - '\bin Go\b'
+      - '\bGolang\b'
+      - '(?:Python|Java|Rust|C\+\+|Node\.?js)(?:,| and| or|/) ?Go\b'
+      - '\bGo(?:,| and| or|/) ?(?:Python|Java|Rust|C\+\+)\b'
+  - {name: Rust, category: language}
+  - {name: Scala, category: language}
+  - {name: Kotlin, category: language}
+  - {name: Swift, category: language}
+  - {name: PHP, category: language}
+  - {name: Ruby, category: language}
+  - {name: Julia, category: language}
+  - {name: MATLAB, category: language}
+  - {name: SAS, category: language, match_policy: case_sensitive}
+  - {name: Bash, category: language, aliases: [shell scripting]}
+
+  # ── Databases & warehouses ──────────────────────────────────────────────
+  - {name: PostgreSQL, category: database, aliases: [Postgres]}
+  - {name: MySQL, category: database}
+  - {name: SQL Server, category: database, aliases: [MSSQL, Microsoft SQL Server]}
+  - {name: Oracle, category: database, aliases: [Oracle DB, Oracle Database]}
+  - {name: MongoDB, category: database, aliases: [Mongo]}
+  - {name: Redis, category: database}
+  - {name: Elasticsearch, category: database, aliases: [Elastic Search]}
+  - {name: Cassandra, category: database}
+  - {name: DynamoDB, category: database}
+  - {name: Snowflake, category: warehouse}
+  - {name: BigQuery, category: warehouse, aliases: [Big Query]}
+  - {name: Redshift, category: warehouse}
+  - {name: Databricks, category: warehouse}
+  - {name: ClickHouse, category: warehouse}
+  - {name: DuckDB, category: warehouse}
+
+  # ── Cloud & infra ───────────────────────────────────────────────────────
+  - {name: AWS, category: cloud, aliases: [Amazon Web Services]}
+  - {name: Azure, category: cloud, aliases: [Microsoft Azure]}
+  - {name: GCP, category: cloud, aliases: [Google Cloud, Google Cloud Platform]}
+  - {name: Docker, category: devops}
+  - {name: Kubernetes, category: devops, aliases: [K8s]}
+  - {name: Terraform, category: devops}
+  - {name: Ansible, category: devops}
+  - {name: Jenkins, category: devops}
+  - {name: GitHub Actions, category: devops}
+  - {name: GitLab CI, category: devops, aliases: [GitLab CI/CD]}
+  - {name: CI/CD, category: devops, aliases: [CICD, continuous integration]}
+  - {name: Linux, category: devops}
+  - {name: Git, category: devops, match_policy: case_sensitive}
+  - {name: Serverless, category: devops, aliases: [AWS Lambda, Lambda functions]}
+
+  # ── Data engineering ────────────────────────────────────────────────────
+  - {name: Apache Spark, category: data-engineering, aliases: [Spark, PySpark]}
+  - {name: Apache Kafka, category: data-engineering, aliases: [Kafka]}
+  - {name: Apache Airflow, category: data-engineering, aliases: [Airflow]}
+  - {name: dbt, category: data-engineering, match_policy: case_sensitive, aliases: [DBT]}
+  - {name: Dagster, category: data-engineering}
+  - {name: Prefect, category: data-engineering, match_policy: case_sensitive}
+  - {name: Apache Flink, category: data-engineering, aliases: [Flink]}
+  - {name: Hadoop, category: data-engineering}
+  - {name: Hive, category: data-engineering, match_policy: case_sensitive}
+  - {name: ETL, category: data-engineering, aliases: [ELT]}
+  - {name: Data Modeling, category: data-engineering, aliases: [data modelling]}
+  - {name: Fivetran, category: data-engineering}
+
+  # ── ML / AI ─────────────────────────────────────────────────────────────
+  - {name: Machine Learning, category: ml, aliases: [ML]}
+  - {name: Deep Learning, category: ml}
+  - {name: NLP, category: ml, aliases: [Natural Language Processing]}
+  - {name: Computer Vision, category: ml}
+  - {name: TensorFlow, category: ml}
+  - {name: PyTorch, category: ml}
+  - {name: scikit-learn, category: ml, aliases: [sklearn, scikit learn]}
+  - {name: Keras, category: ml}
+  - {name: XGBoost, category: ml}
+  - {name: Hugging Face, category: ml, aliases: [HuggingFace]}
+  - {name: LangChain, category: ml}
+  - {name: LLM, category: ml, aliases: [LLMs, large language models]}
+  - {name: Generative AI, category: ml, aliases: [GenAI, Gen AI]}
+  - {name: RAG, category: ml, match_policy: case_sensitive, aliases: [retrieval-augmented generation]}
+  - {name: MLOps, category: ml}
+  - {name: MLflow, category: ml, aliases: [ML Flow]}
+  - {name: pandas, category: ml}
+  - {name: NumPy, category: ml}
+  - {name: A/B Testing, category: analytics, aliases: [AB testing, split testing]}
+
+  # ── BI / analytics ──────────────────────────────────────────────────────
+  - {name: Tableau, category: analytics}
+  - {name: Power BI, category: analytics, aliases: [PowerBI]}
+  - {name: Looker, category: analytics, match_policy: case_sensitive}
+  - {name: Qlik, category: analytics, aliases: [QlikView, Qlik Sense]}
+  - name: Excel
+    category: analytics
+    match_policy: case_sensitive
+    aliases: [Microsoft Excel, MS Excel]
+  - {name: Google Analytics, category: analytics, aliases: [GA4]}
+  - {name: Metabase, category: analytics}
+  - {name: Superset, category: analytics}
+  - {name: Data Visualization, category: analytics, aliases: [data visualisation]}
+  - {name: Statistics, category: analytics, aliases: [statistical analysis, statistical modeling]}
+
+  # ── Frontend ────────────────────────────────────────────────────────────
+  - {name: React, category: frontend, aliases: [React.js, ReactJS]}
+  - {name: Angular, category: frontend, aliases: [AngularJS]}
+  - {name: Vue, category: frontend, aliases: [Vue.js, VueJS]}
+  - {name: Next.js, category: frontend, aliases: [NextJS]}
+  - {name: Svelte, category: frontend, aliases: [SvelteKit]}
+  - {name: HTML, category: frontend, aliases: [HTML5]}
+  - {name: CSS, category: frontend, aliases: [CSS3]}
+  - {name: Tailwind CSS, category: frontend, aliases: [Tailwind, TailwindCSS]}
+  - {name: Redux, category: frontend}
+  - {name: D3.js, category: frontend, aliases: [D3]}
+
+  # ── Backend & frameworks ────────────────────────────────────────────────
+  - {name: Node.js, category: backend, aliases: [NodeJS, Node]}
+  - {name: Django, category: backend}
+  - {name: Flask, category: backend, match_policy: case_sensitive}
+  - {name: FastAPI, category: backend, aliases: [Fast API]}
+  - {name: Spring Boot, category: backend, aliases: [Spring]}
+  - {name: .NET, category: backend, aliases: [dotnet, ASP.NET]}
+  - {name: Ruby on Rails, category: backend, aliases: [Rails]}
+  - {name: Laravel, category: backend}
+  - {name: Express, category: backend, aliases: [Express.js, ExpressJS]}
+  - {name: GraphQL, category: backend}
+  - {name: REST API, category: backend, aliases: [REST APIs, RESTful]}
+  - {name: gRPC, category: backend}
+  - {name: Microservices, category: backend, aliases: [microservice architecture]}
+
+  # ── Practices & platforms ───────────────────────────────────────────────
+  - {name: Agile, category: practice, match_policy: case_sensitive, aliases: [Scrum]}
+  - {name: JIRA, category: practice, aliases: [Jira]}
+  - {name: Salesforce, category: platform}
+  - {name: SAP, category: platform, match_policy: case_sensitive}
+  - {name: Shopify, category: platform}
+  - {name: WordPress, category: platform}
+  - {name: Figma, category: design}
+  - {name: TDD, category: practice, match_policy: case_sensitive, aliases: [test-driven development]}
+  - {name: Unit Testing, category: practice, aliases: [unit tests]}
+  - {name: Data Governance, category: practice}
+  - {name: Data Quality, category: practice}

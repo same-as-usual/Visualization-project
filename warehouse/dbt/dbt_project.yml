@@ -1,0 +1,16 @@
+name: "skill_trends"
+version: "1.0.0"
+config-version: 2
+
+profile: "skill_trends"
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  skill_trends:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

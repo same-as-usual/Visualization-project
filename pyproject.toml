@@ -1,0 +1,35 @@
+[project]
+name = "skill-trends"
+version = "0.1.0"
+description = "Automated job-market skill-trends pipeline: API collection, NLP skill extraction, trend dashboard"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "tenacity>=8.2",
+    "pydantic>=2.5",
+    "PyYAML>=6.0",
+    "structlog>=24.1",
+    "spacy>=3.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "respx>=0.21",
+]
+warehouse = [
+    "psycopg2-binary>=2.9",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ingestion*", "nlp*", "warehouse*", "aggregation*"]
+
+[tool.setuptools.package-data]
+nlp = ["taxonomy/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

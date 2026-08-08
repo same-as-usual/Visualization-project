@@ -1,0 +1,40 @@
+# Pipeline configuration.
+#
+# ROLE QUERIES: pick ANY SIX OR FEWER. The config loader enforces the cap and
+# recomputes the Adzuna call budget against your selection — if your combination
+# of roles x countries x pages projects past the free-tier monthly limit, the
+# collector refuses to start (fail fast beats a silent mid-month cutoff).
+
+role_queries:            # <= 6 entries (enforced)
+  - data analyst
+  - data engineer
+  - data scientist
+  - machine learning engineer
+  - backend developer
+  - frontend developer
+
+adzuna:
+  countries: [in, us, gb]   # Adzuna country endpoints: India + global coverage
+  pages_per_query: 1        # pages per (role, country) per run; 50 results/page
+  results_per_page: 50
+  max_days_old: 2           # normal runs re-cover yesterday -> a missed cron day costs nothing
+  backfill_max_days_old: 30 # --backfill: pull ~30 days of still-live postings on day 0
+  backfill_pages_per_query: 5
+  monthly_call_limit: 1000  # Adzuna free tier
+  monthly_budget_guard: 900 # refuse to start if projected monthly calls exceed this
+
+remotive:
+  # Full-text source (Adzuna descriptions are truncated excerpts).
+  # Remotive asks for polite usage; we fetch each category once per run.
+  # NOTE (observed 2026-08-07): the API currently ignores category/limit params
+  # and returns its full ~33-job feed regardless; invalid slugs fail silently.
+  # We keep valid slugs for when the filter works again — within-run dedupe in
+  # the landing writer means the overlap costs nothing either way.
+  categories: [software-development, data]
+  limit: 200
+
+collection:
+  runs_per_day: 1           # keep in sync with .github/workflows/collect.yml cron
+  landing_dir: data/raw
+  quarantine_dir: data/quarantine
+  runs_log: data/ingestion_runs.jsonl
