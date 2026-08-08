@@ -1,4 +1,5 @@
-const API_BASE = '/data';
+const API_BASE = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/data`;
+
 
 export async function loadTrends() {
   const res = await fetch(`${API_BASE}/trends.json`);
