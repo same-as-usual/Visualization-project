@@ -1,0 +1,61 @@
+name: publish
+
+on:
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout (code + committed raw data)
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Extract skills (raw -> mentions)
+        run: python -m nlp.run --input data/raw/ --output data/extracted/
+
+      - name: Export dashboard JSON
+        run: python scripts/export.py --input data/extracted/ --raw data/raw/ --output dashboard/public/data/
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Build dashboard
+        working-directory: dashboard
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dashboard/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
