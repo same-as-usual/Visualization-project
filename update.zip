@@ -1,0 +1,1 @@
+{"statusCode":502,"message":"proxy upstream error","source":"DAYTONA_DAEMON","timestamp":"2026-08-09T12:34:44.65377372Z","path":"/terminal-update.zip","method":"GET"}
