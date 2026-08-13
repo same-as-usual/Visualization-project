@@ -5,38 +5,52 @@ import TopSkillsChart from './components/TopSkillsChart';
 import Heatmap from './components/Heatmap';
 import FilterPanel from './components/FilterPanel';
 import PipelineHealth from './components/PipelineHealth';
+import Movers from './components/Movers';
+import Categories from './components/Categories';
+import SkillPairs from './components/SkillPairs';
+import Markets from './components/Markets';
 
 const REPO_URL = 'https://github.com/same-as-usual/Visualization-project';
 
-function Logo() {
+const TABS = [
+  { id: 'trends', cmd: 'trends', sidebar: true },
+  { id: 'top', cmd: 'top-skills', sidebar: true },
+  { id: 'pairs', cmd: 'skill-pairs', sidebar: false },
+  { id: 'markets', cmd: 'markets', sidebar: true },
+  { id: 'status', cmd: 'pipeline-status', sidebar: false },
+];
+
+function TermHeader() {
   return (
-    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-      <rect width="28" height="28" rx="6" fill="#2a78d6" />
-      <polyline
-        points="6,19 11,13 15,16 22,8"
-        fill="none"
-        stroke="#fcfcfb"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div
+      className="flex items-center gap-2 px-4 py-2.5"
+      style={{ borderBottom: '1px solid var(--line)' }}
+    >
+      <span className="term-dot" style={{ background: '#e66767' }} />
+      <span className="term-dot" style={{ background: '#c98500' }} />
+      <span className="term-dot" style={{ background: '#2ee6a6' }} />
+      <span className="ml-3 text-xs" style={{ color: 'var(--muted)' }}>
+        visitor@skill-trends:~ — job-market intelligence
+      </span>
+    </div>
   );
 }
 
-function StatTile({ label, value, accent }) {
+function Metric({ label, value, accent }) {
   return (
-    <div className="text-right">
-      <p className="text-xs" style={{ color: '#898781' }}>{label}</p>
-      <p className="text-2xl font-semibold leading-tight" style={{ color: accent || '#0b0b0b' }}>
+    <div className="flex flex-col">
+      <span className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+        {label}
+      </span>
+      <span className="text-lg font-semibold tnum" style={{ color: accent || 'var(--ink)' }}>
         {value ?? '—'}
-      </p>
+      </span>
     </div>
   );
 }
 
 export default function App() {
-  const { trends, topSkills, taxonomy, health, loading, error } = useData();
+  const { trends, topSkills, taxonomy, health, insights, loading, error } = useData();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [activeTab, setActiveTab] = useState('trends');
@@ -44,92 +58,83 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: '#2a78d6' }} />
-          <p style={{ color: '#898781' }}>Loading dashboard data…</p>
-        </div>
+        <p className="prompt cursor" style={{ color: 'var(--accent)' }}>booting skill-trends</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="card max-w-md text-center">
-          <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--bad)' }}>Error loading data</h2>
-          <p style={{ color: '#52514e' }}>{error}</p>
-          <p className="text-sm mt-2" style={{ color: '#898781' }}>
-            Make sure the data files exist in public/data/
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="panel panel-pad max-w-lg">
+          <p style={{ color: 'var(--bad)' }} className="prompt mb-2">error: data load failed</p>
+          <p style={{ color: 'var(--ink-2)' }} className="text-sm">{error}</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
+            expected JSON in public/data/ (run scripts/export.py)
           </p>
         </div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: 'trends', label: 'Trends' },
-    { id: 'top', label: 'Top skills' },
-    { id: 'heatmap', label: 'Heatmap' },
-    { id: 'health', label: 'Pipeline health' },
-  ];
-
+  const tab = TABS.find(t => t.id === activeTab);
   const postings = health?.extraction?.unique_postings;
   const updated = trends?.generated_at ? trends.generated_at.slice(0, 10) : null;
+  const avgSkills = insights?.totals?.avg_skills_per_posting;
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header style={{ background: 'var(--surface)', borderBottom: '1px solid var(--hairline)' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <Logo />
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: '#0b0b0b' }}>
-                  Skill Trends
-                </h1>
-                <p className="text-sm" style={{ color: '#52514e' }}>
-                  Job-market skill demand, measured honestly
-                </p>
-              </div>
+      {/* Header — terminal window */}
+      <header className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="panel">
+          <TermHeader />
+          <div className="px-5 py-5 flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight glow" style={{ color: 'var(--accent)' }}>
+                SKILL_TRENDS
+              </h1>
+              <p className="text-sm mt-1 prompt" style={{ color: 'var(--ink-2)' }}>
+                <span style={{ color: 'var(--ink)' }}>analyze --market=global --honest</span>
+              </p>
             </div>
-            <div className="flex items-center gap-8">
-              <StatTile label="Postings analyzed" value={postings?.toLocaleString()} />
-              <StatTile label="Skills tracked" value={trends?.summary?.total_skills} />
-              <StatTile label="Rising" value={trends?.summary?.rising != null ? `↑ ${trends.summary.rising}` : null} accent="var(--good)" />
-              <StatTile label="Falling" value={trends?.summary?.falling != null ? `↓ ${trends.summary.falling}` : null} accent="var(--bad)" />
+            <div className="flex items-center gap-7 flex-wrap">
+              <Metric label="postings" value={postings?.toLocaleString()} />
+              <Metric label="skills" value={trends?.summary?.total_skills} />
+              <Metric label="avg/posting" value={avgSkills} />
+              <Metric label="rising" value={trends?.summary?.rising != null ? `▲${trends.summary.rising}` : null} accent="var(--good)" />
+              <Metric label="falling" value={trends?.summary?.falling != null ? `▼${trends.summary.falling}` : null} accent="var(--bad)" />
             </div>
           </div>
         </div>
       </header>
 
-      {/* Tabs */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--hairline)' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex gap-7">
-            {tabs.map(tab => (
+      {/* Command nav */}
+      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        <div className="flex gap-1.5 flex-wrap">
+          {TABS.map(t => {
+            const active = t.id === activeTab;
+            return (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="py-3.5 px-0.5 text-sm font-medium transition-colors"
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className="px-3 py-1.5 text-sm rounded-md transition-colors"
                 style={{
-                  color: activeTab === tab.id ? '#0b0b0b' : '#898781',
-                  boxShadow: activeTab === tab.id ? 'inset 0 -2px 0 #2a78d6' : 'none',
+                  color: active ? 'var(--accent)' : 'var(--ink-2)',
+                  background: active ? 'rgba(59,157,255,0.10)' : 'transparent',
+                  border: `1px solid ${active ? 'var(--line-2)' : 'transparent'}`,
                 }}
               >
-                {tab.label}
+                <span style={{ color: 'var(--muted)' }}>./</span>{t.cmd}
               </button>
-            ))}
-          </nav>
+            );
+          })}
         </div>
-      </div>
+      </nav>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'health' ? (
-          <PipelineHealth health={health} />
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Main */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        {tab.sidebar ? (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
             <aside className="lg:col-span-1">
               <FilterPanel
                 taxonomy={taxonomy}
@@ -139,45 +144,47 @@ export default function App() {
                 setSelectedSkills={setSelectedSkills}
               />
             </aside>
-            <div className="lg:col-span-3 space-y-6">
+            <div className="lg:col-span-3 space-y-5">
               {activeTab === 'trends' && (
-                <TrendChart
-                  data={trends}
-                  selectedSkills={selectedSkills}
-                  selectedCategory={selectedCategory}
-                />
+                <>
+                  <TrendChart data={trends} selectedSkills={selectedSkills} selectedCategory={selectedCategory} />
+                  <Movers insights={insights} />
+                </>
               )}
               {activeTab === 'top' && (
-                <TopSkillsChart data={topSkills} trends={trends} />
+                <>
+                  <TopSkillsChart data={topSkills} trends={trends} />
+                  <Categories insights={insights} />
+                </>
               )}
-              {activeTab === 'heatmap' && (
-                <Heatmap data={trends} selectedCategory={selectedCategory} />
+              {activeTab === 'markets' && (
+                <>
+                  <Markets insights={insights} />
+                  <Heatmap data={trends} selectedCategory={selectedCategory} />
+                </>
               )}
             </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {activeTab === 'pairs' && <SkillPairs insights={insights} />}
+            {activeTab === 'status' && <PipelineHealth health={health} />}
           </div>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="mt-10" style={{ background: 'var(--surface)', borderTop: '1px solid var(--hairline)' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm" style={{ color: '#898781' }}>
-            <p>
-              Data: Adzuna (IN · US · GB) + Remotive. Extraction: spaCy PhraseMatcher
-              against a versioned taxonomy. Shares carry 95% Wilson intervals.
-            </p>
-            <div className="flex items-center gap-4">
-              {updated && <span>Updated {updated}</span>}
-              <a
-                href={REPO_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium hover:underline"
-                style={{ color: '#52514e' }}
-              >
-                GitHub ↗
-              </a>
-            </div>
+      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="panel panel-pad flex flex-wrap items-center justify-between gap-3 text-xs" style={{ color: 'var(--muted)' }}>
+          <p>
+            <span style={{ color: 'var(--accent-2)' }}>{'>'}</span> data: adzuna(in·us·gb) + remotive ·
+            nlp: spaCy PhraseMatcher · stats: wilson 95% CI, complete-week deltas
+          </p>
+          <div className="flex items-center gap-4">
+            {updated && <span>last_sync: {updated}</span>}
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: 'var(--accent)' }}>
+              [github]
+            </a>
           </div>
         </div>
       </footer>

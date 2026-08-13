@@ -287,6 +287,178 @@ def load_ingestion_stats(raw_dir: Path) -> dict:
     }
 
 
+def _posting_skillsets(postings: dict[tuple, dict], mentions: list[dict]):
+    """posting key -> set of distinct skills mentioned in it (deduped)."""
+    sets: dict[tuple, set] = defaultdict(set)
+    cats: dict[str, str] = {}
+    for m in mentions:
+        key = (m.get("source"), str(m.get("source_id")))
+        if key not in postings:
+            continue
+        sets[key].add(m["skill"])
+        cats[m["skill"]] = m.get("category", "")
+    return sets, cats
+
+
+def build_cooccurrence(postings, mentions, min_count=10, top_n=30):
+    """Top skill PAIRS that show up in the same posting.
+
+    Ranked by raw co-occurrence count (the robust signal), and filtered to
+    pairs with lift = P(A∧B)/(P(A)·P(B)) >= 1.2 so we only keep genuine
+    positive associations, not two common skills that happen to overlap. Lift
+    is reported per pair as the strength badge.
+
+    Note: Adzuna descriptions are truncated excerpts, so skills-per-posting is
+    low and this view sharpens as full-text (Remotive) volume accumulates —
+    ranking by count rather than lift keeps it honest in the meantime.
+    """
+    sets, cats = _posting_skillsets(postings, mentions)
+    total = len(postings)
+    if total == 0:
+        return []
+
+    solo: dict[str, int] = defaultdict(int)
+    pair: dict[tuple, int] = defaultdict(int)
+    for skills in sets.values():
+        ordered = sorted(skills)
+        for s in ordered:
+            solo[s] += 1
+        for i in range(len(ordered)):
+            for j in range(i + 1, len(ordered)):
+                pair[(ordered[i], ordered[j])] += 1
+
+    out = []
+    for (a, b), c in pair.items():
+        if c < min_count:
+            continue
+        pa, pb = solo[a] / total, solo[b] / total
+        lift = (c / total) / (pa * pb) if pa and pb else 0.0
+        if lift < 1.2:  # keep only genuine positive associations
+            continue
+        # Jaccard: how much of the union of the two skills' postings overlap.
+        union = solo[a] + solo[b] - c
+        jaccard = c / union if union else 0.0
+        out.append({
+            "a": a, "b": b,
+            "count": c,
+            "lift": round(lift, 1),
+            "jaccard": round(jaccard, 3),
+            "cat_a": cats.get(a, ""), "cat_b": cats.get(b, ""),
+        })
+    # Rank by raw count (robust), lift as tiebreak.
+    out.sort(key=lambda r: (-r["count"], -r["lift"]))
+    return out[:top_n]
+
+
+def build_movers(deltas, full_weeks, n=8):
+    """Biggest week-over-week risers and fallers on the latest complete week."""
+    if not full_weeks:
+        return {"latest_week": None, "risers": [], "fallers": []}
+    latest = max(full_weeks)
+    rows = [
+        {
+            "skill": d.skill,
+            "category": d.category,
+            "share": d.current_share,
+            "delta_pp": d.delta_pp,
+            "direction": d.direction,
+        }
+        for d in deltas
+        if d.week == latest and not d.suppressed and d.delta_pp is not None
+    ]
+    risers = sorted([r for r in rows if r["delta_pp"] > 0],
+                    key=lambda r: -r["delta_pp"])[:n]
+    fallers = sorted([r for r in rows if r["delta_pp"] < 0],
+                     key=lambda r: r["delta_pp"])[:n]
+    return {"latest_week": latest, "risers": risers, "fallers": fallers}
+
+
+def build_categories(postings, mentions):
+    """Demand by taxonomy category: % of postings mentioning >=1 skill in it,
+    plus how many distinct skills the category spans."""
+    sets, cats = _posting_skillsets(postings, mentions)
+    total = len(postings)
+    if total == 0:
+        return []
+    cat_postings: dict[str, int] = defaultdict(int)
+    cat_skills: dict[str, set] = defaultdict(set)
+    for skills in sets.values():
+        seen_cats = set()
+        for s in skills:
+            c = cats.get(s, "") or "other"
+            seen_cats.add(c)
+            cat_skills[c].add(s)
+        for c in seen_cats:
+            cat_postings[c] += 1
+    out = [
+        {
+            "category": c,
+            "share": round(cat_postings[c] / total, 6),
+            "postings": cat_postings[c],
+            "distinct_skills": len(cat_skills[c]),
+        }
+        for c in cat_postings
+    ]
+    out.sort(key=lambda r: -r["share"])
+    return out
+
+
+def build_market_specialization(postings, mentions, min_market=200, per_market=6):
+    """For each market, the skills it demands *disproportionately* vs global.
+
+    lift = (skill share within market) / (skill share globally). A lift of 1.8
+    on 'PHP' in India means PHP shows up 80% more often in Indian postings than
+    across the whole dataset — the "what is this market distinctively hiring
+    for" signal that a raw per-market top-10 (which just repeats the global
+    ranking) can't show.
+    """
+    sets, _ = _posting_skillsets(postings, mentions)
+    total = len(postings)
+    if total == 0:
+        return []
+
+    market_of = {k: p.get("country") for k, p in postings.items()}
+    market_totals: dict[str, int] = defaultdict(int)
+    for k in postings:
+        if market_of.get(k):
+            market_totals[market_of[k]] += 1
+
+    global_skill: dict[str, int] = defaultdict(int)
+    market_skill: dict[tuple, int] = defaultdict(int)
+    for k, skills in sets.items():
+        m = market_of.get(k)
+        for s in skills:
+            global_skill[s] += 1
+            if m:
+                market_skill[(m, s)] += 1
+
+    out = []
+    for market, mtot in sorted(market_totals.items(), key=lambda kv: -kv[1]):
+        if mtot < min_market:
+            continue
+        rows = []
+        for s, gc in global_skill.items():
+            mc = market_skill.get((market, s), 0)
+            if mc < 15:  # need enough in-market support to trust the lift
+                continue
+            local = mc / mtot
+            glob = gc / total
+            lift = local / glob if glob else 0.0
+            rows.append({
+                "skill": s,
+                "local_share": round(local, 6),
+                "lift": round(lift, 2),
+                "postings": mc,
+            })
+        rows.sort(key=lambda r: -r["lift"])
+        out.append({
+            "market": market,
+            "market_postings": mtot,
+            "skills": rows[:per_market],
+        })
+    return out
+
+
 def build_taxonomy_json(extractor: SkillExtractor) -> dict:
     categories = defaultdict(list)
     for sd in extractor.skills.values():
@@ -379,6 +551,25 @@ def main():
     with open(output_dir / "top_skills.json", "w", encoding="utf-8") as f:
         json.dump(top_skills, f, indent=2, ensure_ascii=False)
     print(f"  top_skills.json: {len(top_skills)} skills over {len(postings)} postings")
+
+    # insights.json — the extra metrics: co-occurrence, movers, categories,
+    # market specialization.
+    insights = {
+        "generated_at": result.generated_at,
+        "cooccurrence": build_cooccurrence(postings, mentions),
+        "movers": build_movers(deltas, full_weeks),
+        "categories": build_categories(postings, mentions),
+        "market_specialization": build_market_specialization(postings, mentions),
+        "totals": {
+            "postings": len(postings),
+            "avg_skills_per_posting": round(len(mentions) / len(postings), 2) if postings else 0,
+        },
+    }
+    with open(output_dir / "insights.json", "w", encoding="utf-8") as f:
+        json.dump(insights, f, indent=2, ensure_ascii=False)
+    print(f"  insights.json: {len(insights['cooccurrence'])} pairs, "
+          f"{len(insights['categories'])} categories, "
+          f"{len(insights['market_specialization'])} markets")
 
     # taxonomy.json
     extractor = SkillExtractor()

@@ -5,8 +5,8 @@ Cross-run deduplication uses (source, source_id) uniqueness with
 first_seen_at / last_seen_at tracking for reposting detection.
 
 Usage:
-    python -m warehouse.load --db-url $DATABASE_URL --input data/raw/
-    python -m warehouse.load --db-url $DATABASE_URL --input data/raw/remotive/2026-08-07/
+    python -m warehouse.loader --db-url $DATABASE_URL --input data/raw/
+    python -m warehouse.loader --db-url $DATABASE_URL --input data/raw/remotive/2026-08-07/
 
 Idempotent: re-running over the same JSONL produces no duplicates.
 """

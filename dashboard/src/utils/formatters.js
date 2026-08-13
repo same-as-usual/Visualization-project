@@ -27,10 +27,10 @@ export function directionBadge(direction) {
 
 export function directionLabel(direction) {
   const labels = {
-    rising: '↑ Rising',
-    falling: '↓ Falling',
-    stable: '→ Stable',
-    insufficient_data: '? Insufficient data',
+    rising: '▲ rising',
+    falling: '▼ falling',
+    stable: '→ stable',
+    insufficient_data: '? n/a',
   };
   return labels[direction] || direction;
 }

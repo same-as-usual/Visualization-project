@@ -1,27 +1,34 @@
-// Shared visualization tokens + helpers (validated palette — see index.css).
+// Shared visualization tokens + helpers.
+// Dark "terminal" theme — categorical palette is the dataviz reference DARK
+// set, validated against the terminal surface #0a0e17 (lightness band + 3:1
+// contrast PASS; CVD in the 8–12 floor band, legal because every chart ships a
+// legend + direct labels as secondary encoding).
 
 export const SERIES = [
-  '#2a78d6', // 1 blue
-  '#1baf7a', // 2 aqua
-  '#eda100', // 3 yellow
-  '#008300', // 4 green
-  '#4a3aa7', // 5 violet
-  '#e34948', // 6 red
-  '#e87ba4', // 7 magenta
-  '#eb6834', // 8 orange
+  '#3b9dff', // 1 blue   (accent-forward for the blue theme)
+  '#22d3ee', // 2 cyan
+  '#c98500', // 3 amber
+  '#2ee6a6', // 4 green
+  '#9085e9', // 5 violet
+  '#e66767', // 6 red
+  '#d55181', // 7 magenta
+  '#d95926', // 8 orange
 ];
 
-export const INK = '#0b0b0b';
-export const INK_2 = '#52514e';
-export const MUTED = '#898781';
-export const GRID = '#e1e0d9';
-export const BASELINE = '#c3c2b7';
-export const SURFACE = '#fcfcfb';
+// Ink tokens for chart chrome on the dark surface.
+export const INK = '#d7e3f4';
+export const INK_2 = '#8aa0c0';
+export const MUTED = '#5a6b85';
+export const GRID = '#16202f';
+export const BASELINE = '#243247';
+export const SURFACE = '#0b111c';
+export const ACCENT = '#3b9dff';
 
-// Sequential blue ramp (light → dark) for magnitude (heatmap).
-export const SEQ = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95'];
-// Ramp steps dark enough to need white in-cell text.
-export const SEQ_WHITE_TEXT_FROM = 3;
+// Sequential cyan→blue ramp (light→dark reversed for a dark bg: brighter =
+// higher magnitude) for the heatmap.
+export const SEQ = ['#0f1e33', '#123a5e', '#12568f', '#1b73bf', '#2a90e0', '#4fb0ff'];
+// Steps bright enough to carry dark text instead of light.
+export const SEQ_DARK_TEXT_FROM = 5;
 
 /**
  * Stable skill → color assignment. Color follows the ENTITY, not its current

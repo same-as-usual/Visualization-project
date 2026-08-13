@@ -2,11 +2,12 @@
 
 **Live dashboard:** https://same-as-usual.github.io/Visualization-project/
 
-An end-to-end data pipeline and dashboard that tracks which skills employers ask
-for across the **India, US, UK and remote** job markets — collected daily from
-legitimate APIs, extracted with NLP, and reported with honest statistics.
+An end-to-end data pipeline and **terminal-style dashboard** that tracks which
+skills employers ask for across the **India, US, UK and remote** job markets —
+collected daily from legitimate APIs, extracted with NLP, and reported with
+honest statistics.
 
-![Skill Trends dashboard — weekly skill demand](docs/img/dashboard-trends.png)
+![Skill Trends dashboard — weekly skill demand and movers](docs/img/dashboard-trends.png)
 
 ## Features
 
@@ -21,13 +22,22 @@ legitimate APIs, extracted with NLP, and reported with honest statistics.
   - Groups with fewer than 30 postings are **suppressed**, not reported as noise
   - Week-over-week deltas only compare **complete weeks** — a half-collected week
     is flagged `*` on the chart instead of masquerading as a market crash
-- **Skill × market heatmap** — demand compared across India, the US and the UK
+- **Six analytical views:**
+  - **Trends** — skill demand over time, filter to compare up to 8 skills
+  - **Weekly movers** — biggest week-over-week risers and fallers
+  - **Top skills** — ranked demand with confidence intervals + category composition
+  - **Skill pairs** — which skills co-occur in the same posting (count + *lift*
+    over chance: React+TypeScript, Java+Spring Boot, Python+SQL…)
+  - **Market specialization** — what each market demands *disproportionately*
+    (skill share within a market ÷ its global share) plus a skill × market heatmap
+  - **Pipeline status** — collection/extraction observability, live from the run log
 - **Warehouse layer** — Postgres (Neon) loader with `(source, source_id)`
   deduplication plus dbt staging and mart models, schema-tested in CI
 - **Zero-backend deployment** — the pipeline exports static JSON; the React
   dashboard is rebuilt and republished to GitHub Pages after every collection run
 
-![Skill × market heatmap](docs/img/dashboard-heatmap.png)
+![Skill pairs — co-occurrence with lift](docs/img/dashboard-pairs.png)
+![Market specialization and heatmap](docs/img/dashboard-markets.png)
 
 ## How it works
 
@@ -61,7 +71,10 @@ legitimate APIs, extracted with NLP, and reported with honest statistics.
    provides true denominators for the share math.
 3. **Aggregate** — `aggregation/` buckets postings by the week they were
    *posted* (not fetched), computes shares with Wilson CIs, 4-week rolling
-   deltas, and rising/falling/stable direction flags.
+   deltas, and rising/falling/stable direction flags. `scripts/export.py` also
+   derives the extra metrics — skill co-occurrence (count + lift), weekly
+   movers, category composition, and per-market specialization — into
+   `insights.json`.
 4. **Publish** — `scripts/export.py` writes dashboard-ready JSON; the React +
    Recharts dashboard is built and deployed to GitHub Pages. No live backend,
    nothing to cold-start.

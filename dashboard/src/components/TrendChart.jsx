@@ -13,16 +13,16 @@ function VizTooltip({ active, payload, label, partialWeeks }) {
   const rows = [...payload].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
   return (
     <div
-      className="rounded-lg px-3 py-2 text-xs"
-      style={{ background: SURFACE, border: '1px solid rgba(11,11,11,0.1)', boxShadow: '0 2px 8px rgba(11,11,11,0.08)' }}
+      className="rounded-md px-3 py-2 text-xs"
+      style={{ background: SURFACE, border: '1px solid rgba(59,157,255,0.3)', boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
     >
-      <p className="mb-1.5 font-medium" style={{ color: INK_2 }}>
-        {partialWeeks.has(label) ? `${label} (partial week)` : label}
+      <p className="mb-1.5" style={{ color: INK_2 }}>
+        {partialWeeks.has(label) ? `${label} · partial` : label}
       </p>
       {rows.map((r) => (
-        <div key={r.dataKey} className="flex items-center gap-2 py-0.5">
+        <div key={r.dataKey} className="flex items-center gap-2 py-0.5 tnum">
           <span style={{ display: 'inline-block', width: 12, height: 2, background: r.stroke, borderRadius: 1 }} />
-          <span className="font-semibold tnum" style={{ color: INK }}>{formatPercent(r.value)}</span>
+          <span className="font-semibold" style={{ color: INK }}>{formatPercent(r.value)}</span>
           <span style={{ color: INK_2 }}>{r.dataKey}</span>
         </div>
       ))}
@@ -31,33 +31,20 @@ function VizTooltip({ active, payload, label, partialWeeks }) {
 }
 
 export default function TrendChart({ data, selectedSkills, selectedCategory }) {
-  const partialWeeks = useMemo(
-    () => new Set(data?.partial_weeks || []),
-    [data]
-  );
-
-  // Stable entity → color map built from the FULL dataset, so filtering
-  // never repaints a surviving series.
+  const partialWeeks = useMemo(() => new Set(data?.partial_weeks || []), [data]);
   const colorMap = useMemo(() => buildSkillColorMap(data?.groups), [data]);
 
   const { chartData, skills } = useMemo(() => {
     if (!data?.groups) return { chartData: [], skills: [] };
-
-    // Drop suppressed cells (weeks with too few postings to be meaningful).
     let groups = data.groups.filter(g => !g.suppressed);
-
     if (selectedCategory && selectedCategory !== 'all') {
       groups = groups.filter(g => g.category === selectedCategory);
     }
-
     let skillList;
     if (selectedSkills?.length > 0) {
       skillList = selectedSkills.slice(0, MAX_LINES);
     } else {
-      // No explicit selection: default to the top skills by average share —
-      // plotting all ~100+ at once is an unreadable rainbow.
-      const totals = {};
-      const counts = {};
+      const totals = {}, counts = {};
       for (const g of groups) {
         totals[g.skill] = (totals[g.skill] || 0) + g.current_share;
         counts[g.skill] = (counts[g.skill] || 0) + 1;
@@ -66,7 +53,6 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
         .sort((a, b) => totals[b] / counts[b] - totals[a] / counts[a])
         .slice(0, MAX_LINES);
     }
-
     const skillSet = new Set(skillList);
     const byWeek = {};
     for (const g of groups) {
@@ -74,14 +60,12 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
       if (!byWeek[g.week]) byWeek[g.week] = { week: g.week };
       byWeek[g.week][g.skill] = g.current_share;
     }
-
     return {
       chartData: Object.values(byWeek).sort((a, b) => a.week.localeCompare(b.week)),
       skills: skillList,
     };
   }, [data, selectedSkills, selectedCategory]);
 
-  // Clean y-axis: pick a round tick step (1/2/5/10/20pp) giving ≤5 ticks.
   const { niceMax, yTicks } = useMemo(() => {
     let max = 0;
     for (const row of chartData) {
@@ -99,28 +83,27 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
 
   if (!chartData.length) {
     return (
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-1">Skill demand over time</h3>
-        <p style={{ color: MUTED }}>No trend data yet — it appears after the first collection runs.</p>
+      <div className="panel panel-pad">
+        <h3 className="text-base font-semibold mb-1 prompt" style={{ color: INK }}>trends</h3>
+        <p style={{ color: MUTED }}>no trend data yet — appears after the first collection run.</p>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <h3 className="text-lg font-semibold" style={{ color: INK }}>Skill demand over time</h3>
-      <p className="text-sm mt-1 mb-5" style={{ color: INK_2 }}>
-        % of postings mentioning each skill, by week posted
-        {(!selectedSkills || selectedSkills.length === 0) &&
-          ' — top skills shown; pick specific ones in the filter panel'}
-        {partialWeeks.size > 0 && '. Weeks marked * are partially collected.'}
+    <div className="panel panel-pad">
+      <h3 className="text-base font-semibold prompt" style={{ color: INK }}>skill demand over time</h3>
+      <p className="text-xs mt-1 mb-5" style={{ color: INK_2 }}>
+        {'// '}% of postings mentioning each skill, by week posted
+        {(!selectedSkills || selectedSkills.length === 0) && ' — top skills; filter to compare specific ones'}
+        {partialWeeks.size > 0 && ' · weeks marked * are partial'}
       </p>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={GRID} strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="week"
-            tick={{ fontSize: 12, fill: MUTED }}
+            tick={{ fontSize: 11, fill: MUTED }}
             tickLine={false}
             axisLine={{ stroke: BASELINE }}
             tickFormatter={(w) => partialWeeks.has(w) ? `${w}*` : w}
@@ -129,21 +112,16 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
             domain={[0, niceMax]}
             ticks={yTicks}
             tickFormatter={(v) => `${Math.round(v * 100)}%`}
-            tick={{ fontSize: 12, fill: MUTED }}
+            tick={{ fontSize: 11, fill: MUTED }}
             tickLine={false}
             axisLine={false}
             width={44}
           />
-          <Tooltip
-            content={<VizTooltip partialWeeks={partialWeeks} />}
-            cursor={{ stroke: BASELINE, strokeWidth: 1 }}
-          />
+          <Tooltip content={<VizTooltip partialWeeks={partialWeeks} />} cursor={{ stroke: BASELINE, strokeWidth: 1 }} />
           <Legend
             iconType="plainline"
             wrapperStyle={{ paddingTop: 12 }}
-            formatter={(value) => (
-              <span style={{ color: INK_2, fontSize: 13, marginRight: 4 }}>{value}</span>
-            )}
+            formatter={(value) => <span style={{ color: INK_2, fontSize: 12, marginRight: 4 }}>{value}</span>}
           />
           {skills.map((skill) => (
             <Line
@@ -154,9 +132,7 @@ export default function TrendChart({ data, selectedSkills, selectedCategory }) {
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              // ≥8px marker with a 2px surface ring so dots stay legible
-              // where lines cross
-              dot={{ r: 4, fill: colorMap[skill] || MUTED, stroke: SURFACE, strokeWidth: 2 }}
+              dot={{ r: 3, fill: colorMap[skill] || MUTED, stroke: SURFACE, strokeWidth: 2 }}
               activeDot={{ r: 5, stroke: SURFACE, strokeWidth: 2 }}
             />
           ))}
