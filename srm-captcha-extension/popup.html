@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SRM Captcha Autofill</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        width: 300px;
+        margin: 0;
+        padding: 14px;
+        font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      label { display: block; margin: 10px 0 3px; font-weight: 600; }
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 7px 8px;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+      .row input[type="checkbox"] { width: 16px; height: 16px; }
+      .row label { margin: 0; font-weight: 500; }
+      .hint { color: #888; font-size: 11px; margin-top: 2px; }
+      .hint a { color: #2f6fd0; }
+      button {
+        margin-top: 14px;
+        width: 100%;
+        padding: 9px;
+        border: 0;
+        border-radius: 6px;
+        background: #2f6fd0;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { background: #2559ab; }
+      #saved { text-align: center; color: #2e7d32; font-weight: 600; height: 16px; margin-top: 8px; }
+      details { margin-top: 12px; }
+      summary { cursor: pointer; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>SRM Captcha Autofill</h1>
+
+    <label for="netid">NetID</label>
+    <input type="text" id="netid" maxlength="6" placeholder="abcd12" autocomplete="off" />
+
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Portal password" autocomplete="off" />
+
+    <div class="row">
+      <input type="checkbox" id="autofillCreds" />
+      <label for="autofillCreds">Autofill NetID &amp; password</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="autoSolve" />
+      <label for="autoSolve">Auto-solve captcha</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="autoSubmit" />
+      <label for="autoSubmit">Auto-click Login (max 2 tries)</label>
+    </div>
+
+    <details>
+      <summary>Gemini fallback (optional)</summary>
+      <label for="geminiApiKey">Gemini API key</label>
+      <input type="password" id="geminiApiKey" placeholder="AIza…" autocomplete="off" />
+      <div class="hint">
+        Only used if the captcha can't be read from the page. Get a free key at
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio</a>.
+      </div>
+      <label for="geminiModel">Gemini model</label>
+      <input type="text" id="geminiModel" placeholder="gemini-flash-latest" autocomplete="off" />
+    </details>
+
+    <button id="save">Save</button>
+    <div id="saved"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

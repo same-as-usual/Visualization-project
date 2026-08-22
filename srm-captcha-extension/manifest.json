@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "SRM Portal Captcha Autofill",
+  "version": "1.0.0",
+  "description": "Auto-fills NetID, password and the captcha on the SRM Student Portal, and can auto-login. Reads the captcha from the page; falls back to Gemini vision.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://sp.srmist.edu.in/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SRM Captcha Autofill",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://sp.srmist.edu.in/srmiststudentportal/students/loginManager/*"],
+      "js": ["reader.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://sp.srmist.edu.in/srmiststudentportal/students/loginManager/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ]
+}
