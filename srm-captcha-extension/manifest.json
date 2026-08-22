@@ -28,12 +28,6 @@
   "content_scripts": [
     {
       "matches": ["https://sp.srmist.edu.in/srmiststudentportal/students/loginManager/*"],
-      "js": ["reader.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["https://sp.srmist.edu.in/srmiststudentportal/students/loginManager/*"],
       "js": ["content.js"],
       "run_at": "document_idle",
       "world": "ISOLATED"

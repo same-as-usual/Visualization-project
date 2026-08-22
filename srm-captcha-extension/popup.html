@@ -68,16 +68,22 @@
       <label for="autoSubmit">Auto-click Login (max 2 tries)</label>
     </div>
 
+    <label for="geminiApiKey">Gemini API key <span style="color:#c0392b">(required)</span></label>
+    <input type="password" id="geminiApiKey" placeholder="AIza…" autocomplete="off" />
+    <div class="hint">
+      The captcha is read from the image using Gemini vision. Get a free key at
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio</a>.
+    </div>
+
     <details>
-      <summary>Gemini fallback (optional)</summary>
-      <label for="geminiApiKey">Gemini API key</label>
-      <input type="password" id="geminiApiKey" placeholder="AIza…" autocomplete="off" />
-      <div class="hint">
-        Only used if the captcha can't be read from the page. Get a free key at
-        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Google AI Studio</a>.
-      </div>
+      <summary>Advanced</summary>
       <label for="geminiModel">Gemini model</label>
-      <input type="text" id="geminiModel" placeholder="gemini-flash-latest" autocomplete="off" />
+      <input type="text" id="geminiModel" placeholder="gemini-2.5-flash" autocomplete="off" />
+      <div class="hint">
+        Leave blank to auto-pick a working free Flash model. Options:
+        <code>gemini-2.5-flash</code>, <code>gemini-2.0-flash</code>,
+        <code>gemini-flash-latest</code>.
+      </div>
     </details>
 
     <button id="save">Save</button>

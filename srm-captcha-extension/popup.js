@@ -13,7 +13,7 @@ const DEFAULTS = {
   netid: "",
   password: "",
   geminiApiKey: "",
-  geminiModel: "gemini-flash-latest",
+  geminiModel: "gemini-2.5-flash",
   autofillCreds: true,
   autoSolve: true,
   autoSubmit: false
@@ -37,7 +37,7 @@ function save() {
     if (!el) continue;
     data[key] = kind === "check" ? el.checked : el.value.trim();
   }
-  if (!data.geminiModel) data.geminiModel = DEFAULTS.geminiModel;
+  // Blank model = let the background service worker auto-pick a working model.
   chrome.storage.local.set(data, () => {
     const saved = document.getElementById("saved");
     saved.textContent = "Saved ✓";

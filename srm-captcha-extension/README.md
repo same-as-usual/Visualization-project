@@ -9,16 +9,19 @@ login page — and can optionally click **Login** for you.
 
 ## How it solves the captcha
 
-The SRM login page renders the captcha from a value it embeds in the page itself
-(`window.SECURE_CONFIG.captchaText`). The extension reads that value directly, so
-solving is **instant, 100% accurate, and fully offline** in the normal case.
+The real captcha image on the SRM portal is generated server-side (`SCaptchaServlet`)
+and its answer is never exposed to the page — the page's `SECURE_CONFIG.captchaText`
+is only a decoy the anti-phishing script uses. So the extension reads the **displayed
+image** with vision OCR:
 
-Solver precedence:
+1. Capture the currently displayed captcha pixels via `<canvas>` (without
+   re-requesting the server, which would rotate the captcha).
+2. Send the image to the **Google Gemini vision API** and read the characters.
+3. Fill the `#captcha` field with real input events.
 
-1. **Page value** — read `captchaText` from the page (via a MAIN-world reader script).
-2. **Inline-script regex** — recover it from the page's `<script>` text if needed.
-3. **Gemini vision (fallback)** — if the value is ever missing, the captcha image is
-   sent to the Google Gemini API and read with OCR. Requires a free API key (below).
+A **free Gemini API key is required** (see below). The service worker auto-selects a
+working free Flash model, and the extension re-solves automatically when you click the
+captcha refresh icon.
 
 ## Install (Brave / Chrome / Edge)
 
@@ -36,18 +39,17 @@ In the popup:
 - **Auto-solve captcha** — toggle captcha filling.
 - **Auto-click Login** — if on, submits automatically (capped at **2 attempts** per
   page session to avoid account lockout on a bad login).
-- **Gemini fallback** (optional) — paste a free API key from
-  [Google AI Studio](https://aistudio.google.com/apikey). Default model is
-  `gemini-flash-latest`; change it if you prefer another Flash model.
+- **Gemini API key** (required) — paste a free key from
+  [Google AI Studio](https://aistudio.google.com/apikey). Leave the model blank to
+  auto-pick a working free Flash model, or set one under **Advanced**.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `manifest.json` | MV3 config; scopes scripts to the SRM login URL |
-| `reader.js` | MAIN-world script; mirrors `captchaText` to a DOM attribute |
-| `content.js` | Autofill + solve + fill + bounded auto-submit; status pill |
-| `background.js` | Service worker; calls the Gemini vision API (fallback) |
+| `content.js` | Autofill + capture image + solve + fill + bounded auto-submit; status pill |
+| `background.js` | Service worker; calls the Gemini vision API (with model fallback) |
 | `popup.html` / `popup.js` | Settings UI stored in `chrome.storage.local` |
 
 ## Privacy & security

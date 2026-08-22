@@ -1,9 +1,15 @@
 // Isolated-world content script for the SRM Student Portal login page.
+//
+// IMPORTANT: The page's guardlogin.js loads the REAL captcha image from the
+// server (SCaptchaServlet). Its answer lives only on the server — the
+// SECURE_CONFIG.captchaText value is a decoy used only for anti-phishing.
+// So we must read the displayed image with OCR/vision (Gemini).
+//
 // Responsibilities:
 //   1. Autofill NetID + password from saved settings.
-//   2. Solve the captcha (page value -> inline-script regex -> Gemini fallback).
+//   2. Solve the captcha by sending the DISPLAYED image to Gemini vision.
 //   3. Fill the captcha field with proper input events.
-//   4. Optionally auto-click Login, with a bounded retry (refresh + re-solve).
+//   4. Optionally auto-click Login, with a bounded retry to avoid lockout.
 (function () {
   "use strict";
 
@@ -28,7 +34,6 @@
     autoSubmit: false
   };
 
-  // ---------- small helpers ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const $ = (sel) => document.querySelector(sel);
 
@@ -38,7 +43,7 @@
     });
   }
 
-  // Set a value on an input the way a real user would, so any listeners fire.
+  // Set a value the way a real user would, so any listeners fire.
   function setNativeValue(el, value) {
     if (!el) return;
     const proto = el instanceof HTMLTextAreaElement
@@ -67,7 +72,7 @@
         font: "13px/1.3 system-ui, sans-serif",
         color: "#fff",
         boxShadow: "0 2px 10px rgba(0,0,0,.25)",
-        maxWidth: "280px"
+        maxWidth: "300px"
       });
       document.body.appendChild(pill);
     }
@@ -76,29 +81,16 @@
     pill.textContent = "SRM: " + text;
   }
 
-  // ---------- captcha solving ----------
-  function readFromDataset() {
-    const v = document.documentElement.dataset.srmCaptchaText;
-    return v && v.length ? v : null;
-  }
-
-  function readFromScripts() {
-    const scripts = document.querySelectorAll("script:not([src])");
-    for (const s of scripts) {
-      const m = s.textContent && s.textContent.match(/captchaText\s*=\s*['"]([^'"]+)['"]/);
-      if (m) return m[1];
-    }
-    return null;
-  }
-
-  async function waitForPageCaptcha(timeoutMs) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      const v = readFromDataset() || readFromScripts();
-      if (v) return v;
-      await sleep(150);
-    }
-    return null;
+  // ---------- captcha image capture ----------
+  function waitForImage(img, timeoutMs) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      (function check() {
+        if (img.complete && (img.naturalWidth || 0) > 0) return resolve(true);
+        if (Date.now() - start > timeoutMs) return resolve(false);
+        setTimeout(check, 150);
+      })();
+    });
   }
 
   function blobToDataURL(blob) {
@@ -110,48 +102,91 @@
     });
   }
 
+  // Capture the CURRENTLY DISPLAYED captcha pixels. We deliberately do NOT
+  // re-request SCaptchaServlet, because that would rotate the server captcha
+  // and desync from what's on screen.
   async function getCaptchaImageDataUrl() {
     const img = $(SEL.captchaImg);
     if (!img) return null;
-    // The live <img> may only carry data-src until the page's own JS sets src.
-    let url = img.currentSrc || img.src || img.getAttribute("data-src");
-    if (!url) return null;
+    await waitForImage(img, 8000);
+
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+
+    // Preferred: draw the loaded element to a canvas.
     try {
-      // Same-origin fetch (with cookies) so the servlet returns the current image.
-      const resp = await fetch(url, { credentials: "include", cache: "no-store" });
-      const blob = await resp.blob();
-      return await blobToDataURL(blob);
+      if (w && h) {
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        return canvas.toDataURL("image/png");
+      }
     } catch (e) {
-      return null;
+      /* canvas tainted or failed — fall through */
     }
+
+    // Fallback: fetch the element's current src (a blob: URL set by the page,
+    // or a same-origin URL). This does not rotate the server captcha.
+    try {
+      const src = img.currentSrc || img.src;
+      if (src) {
+        const resp = await fetch(src, { credentials: "include", cache: "no-store" });
+        const blob = await resp.blob();
+        return await blobToDataURL(blob);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return null;
   }
 
   async function solveViaGemini() {
     const dataUrl = await getCaptchaImageDataUrl();
-    if (!dataUrl) return null;
+    if (!dataUrl) {
+      status("Captcha image not ready — try the refresh icon.", "error");
+      return null;
+    }
     try {
       const res = await chrome.runtime.sendMessage({ type: "solveGemini", dataUrl });
       if (res && res.ok) return res.text;
-      if (res && res.error) status(res.error, "error");
+      status(res && res.error ? res.error : "Gemini failed.", "error");
     } catch (e) {
       status("Gemini call failed: " + e.message, "error");
     }
     return null;
   }
 
-  // Precedence: page value -> inline script regex -> Gemini vision fallback.
-  async function solveCaptcha() {
-    const fromPage = await waitForPageCaptcha(4000);
-    if (fromPage) return { text: fromPage, source: "page" };
-
-    status("Reading captcha with Gemini…");
-    const fromGemini = await solveViaGemini();
-    if (fromGemini) return { text: fromGemini, source: "gemini" };
-
+  // ---------- fill flow ----------
+  async function solveAndFill(reason) {
+    status(reason || "Solving captcha with Gemini…");
+    const text = await solveViaGemini();
+    const field = $(SEL.captcha);
+    if (text && field) {
+      setNativeValue(field, text);
+      status("Captcha filled: " + text, "ok");
+      return text;
+    }
+    if (!text) status("Could not solve captcha — fill it manually.", "error");
     return null;
   }
 
-  // ---------- main flow ----------
+  // Re-solve automatically whenever a new captcha image loads (e.g. the user
+  // clicks the recycle icon).
+  let lastSolvedSrc = null;
+  function watchForRefresh() {
+    const img = $(SEL.captchaImg);
+    if (!img) return;
+    img.addEventListener("load", () => {
+      const src = img.currentSrc || img.src;
+      if (src && src !== lastSolvedSrc) {
+        lastSolvedSrc = src;
+        solveAndFill("Captcha refreshed — re-solving…");
+      }
+    });
+  }
+
+  // ---------- main ----------
   async function run() {
     if (window.__srmCaptchaRan) return;
     window.__srmCaptchaRan = true;
@@ -165,32 +200,25 @@
       if (p && settings.password) setNativeValue(p, settings.password);
     }
 
-    let solved = null;
+    let solvedText = null;
     if (settings.autoSolve) {
-      status("Solving captcha…");
-      solved = await solveCaptcha();
-      const field = $(SEL.captcha);
-      if (solved && field) {
-        setNativeValue(field, solved.text);
-        status("Captcha filled (" + solved.source + "): " + solved.text, "ok");
-      } else {
-        status("Could not solve captcha — fill it manually.", "error");
-      }
+      const img = $(SEL.captchaImg);
+      if (img) lastSolvedSrc = img.currentSrc || img.src || null;
+      solvedText = await solveAndFill();
+      watchForRefresh();
     }
 
     if (settings.autoSubmit) {
-      await maybeAutoSubmit(settings, solved);
+      await maybeAutoSubmit(settings, solvedText);
     }
   }
 
-  async function maybeAutoSubmit(settings, solved) {
-    const haveCreds =
-      settings.autofillCreds && settings.netid && settings.password;
-    if (!haveCreds) {
+  async function maybeAutoSubmit(settings, solvedText) {
+    if (!(settings.autofillCreds && settings.netid && settings.password)) {
       status("Auto-submit skipped: set NetID + password in the popup.", "error");
       return;
     }
-    if (!solved) {
+    if (!solvedText) {
       status("Auto-submit skipped: captcha unsolved.", "error");
       return;
     }
@@ -201,15 +229,10 @@
     } catch (e) {
       attempts = 0;
     }
-
     if (attempts >= MAX_AUTOSUBMIT_ATTEMPTS) {
-      status(
-        "Auto-submit stopped after " + attempts + " tries (avoiding lockout). Log in manually.",
-        "error"
-      );
+      status("Auto-submit stopped after " + attempts + " tries (avoiding lockout).", "error");
       return;
     }
-
     try {
       sessionStorage.setItem(ATTEMPT_KEY, String(attempts + 1));
     } catch (e) {
@@ -217,20 +240,15 @@
     }
 
     status("Logging in… (attempt " + (attempts + 1) + ")");
+    await sleep(400);
     const btn = $(SEL.login);
-    // Let the field events settle, then click the real button so the page's
-    // own JS (token/fingerprint generation) runs normally.
-    await sleep(300);
     if (btn) {
       btn.click();
     } else {
       const form = $(SEL.form);
-      if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+      if (form) (form.requestSubmit ? form.requestSubmit() : form.submit());
     }
   }
 
-  // Clear the attempt counter if we ever land somewhere that isn't the login
-  // page (i.e. login succeeded). This content script only runs on loginManager,
-  // so reaching here again means we're still on login -> a prior attempt failed.
   run();
 })();
